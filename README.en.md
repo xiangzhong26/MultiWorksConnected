@@ -11,6 +11,15 @@
 
 <p align="center"><sub>Real screenshots using synthetic data in an isolated test environment. Both the app and documentation support English and Chinese.</sub></p>
 
+<details>
+<summary>Clipboard screenshots and historical images</summary>
+
+| Image expanded in chat | Older images collapsed by default |
+| :---: | :---: |
+| ![Inline image](artifacts/clipboard-chat.jpg) | ![Collapsed historical image](artifacts/clipboard-history.jpg) |
+
+</details>
+
 ## Overview
 
 MultiWorks Connected is a personal workspace for sharing work across computers, phones, and tablets. Its chat interface organizes text, links, PDFs, and small archives into named project rooms.
@@ -24,6 +33,7 @@ The application and data live on your own computer. For remote access, a cloud s
 | Project organization | Names, collapsible groups, drag sorting, creation and latest-message timestamps; actions in ⋯ menus |
 | Live sync | WebSocket events, reconnection, catch-up for the active room |
 | Text messages | Optimistic display, manual retry, deduplication, clickable links |
+| Clipboard and images | Paste screenshots, confirm thumbnails, view images inline; expand older images on demand |
 | Uploads | Drop anywhere, multiple selection, confirmation before upload, progress, cancellation, retry |
 | File previews | Local PDF reader, images, text, Word text, and Excel worksheets |
 | Downloads | Authentication, browser-managed progress, HTTP Range support |
@@ -113,6 +123,8 @@ Identity is per browser, not a hardware serial number. Private browsing or clear
 
 - Type a message and select Send. **Enter** sends; **Shift + Enter** inserts a newline on desktop.
 - Select Add file or drop files anywhere on the page, including the composer; multiple selection is supported.
+- Use **Ctrl + V** (**⌘ + V** on Mac) in the composer to paste text, links, clipboard files or screenshots, including WeChat screenshots. Images show local confirmation thumbnails before any upload. Ordinary text keeps its native paste behavior.
+- PNG / JPEG / GIF / WebP images display inline and open full previews when clicked. At 7×24 hours old, images default to file information only; use **👁** to expand or collapse them in chat. This display rule never deletes images or messages.
 - Check the destination room, names, and sizes in the confirmation dialog, remove unwanted files, then select Confirm send. No upload starts before confirmation.
 - Watch upload progress, cancel if needed, or select Retry after failure.
 - Open the same room on another device to receive messages and files in real time.

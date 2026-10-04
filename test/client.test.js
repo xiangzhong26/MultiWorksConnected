@@ -5,21 +5,58 @@ import { readFileSync } from 'node:fs';
 
 function client(){
   class Element{
-    constructor(){this.children=[];this.open=false;this.hidden=false;this.listeners={};this.value='';this.classList={add(){},remove(){},toggle(){}};}
+    constructor(tag='div'){this.tagName=tag;this.children=[];this.open=false;this.hidden=false;this.listeners={};this.attributes={};this.value='';this.classList={add(){},remove(){},toggle(){}};}
     remove(){this.removed=true;}
     append(...children){this.children.push(...children);}
+    prepend(...children){this.children.unshift(...children);}
     replaceChildren(...children){this.children=children;}
-    setAttribute(){}
+    setAttribute(name,value){this.attributes[name]=value;}
+    removeAttribute(name){delete this.attributes[name];delete this[name];}
+    setRangeText(text,start,end){this.value=this.value.slice(0,start)+text+this.value.slice(end);}
     addEventListener(name,callback){this.listeners[name]=callback;}
     showModal(){this.open=true;}
     close(){this.open=false;this.listeners.close?.();}
   }
-  const elements=new Map(),events={},uploaded=[],notices=[];
+  const elements=new Map(),events={},uploaded=[],notices=[],urls=[],revoked=[];
+  class LocalURL extends URL {static createObjectURL(){const url=`blob:test-${urls.length}`;urls.push(url);return url;}static revokeObjectURL(url){revoked.push(url);}}
   const $=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
-  const sandbox={$ ,document:{createElement:()=>new Element(),addEventListener:(name,callback)=>events[name]=callback},user:{id:'device'},active:'room-a',rooms:[{id:'room-a',name:'项目 A'},{id:'room-b',name:'项目 B'}],window:{maxFileMB:100},location:{origin:'https://work.example.com'},URL,setTimeout,clearTimeout,size:n=>`${n} B`,queueFiles:(files,room)=>uploaded.push({files,room}),toast:message=>notices.push(message),pending:new Map(),sessionStorage:{setItem(){}},drafts:{}};
+  const sandbox={$ ,document:{createElement:tag=>new Element(tag),addEventListener:(name,callback)=>events[name]=callback},user:{id:'device'},active:'room-a',rooms:[{id:'room-a',name:'项目 A'},{id:'room-b',name:'项目 B'}],window:{maxFileMB:100},location:{origin:'https://work.example.com'},URL:LocalURL,File,setTimeout,clearTimeout,size:n=>`${n} B`,queueFiles:(files,room)=>uploaded.push({files,room}),toast:message=>notices.push(message),pending:new Map(),sessionStorage:{setItem(){}},drafts:{}};
   vm.createContext(sandbox);vm.runInContext(readFileSync('public/features.js','utf8'),sandbox);
-  return {sandbox,$,events,uploaded,notices,run:code=>vm.runInContext(code,sandbox)};
+  return {sandbox,$,events,uploaded,notices,urls,revoked,run:code=>vm.runInContext(code,sandbox)};
 }
+
+test('pasted screenshot shows a local thumbnail, waits for confirmation and releases blob URLs',()=>{
+  const c=client(),image=new File(['screenshot-fixture'],'image.png',{type:'image/png'});let prevented=0;
+  c.$('text').listeners.paste({target:c.$('text'),clipboardData:{items:[{kind:'file',getAsFile:()=>image}],files:[image],getData:()=>''},preventDefault(){prevented++;}});
+  assert.equal(prevented,1);assert.equal(c.uploaded.length,0);assert.equal(c.$('upload-dialog').open,true);
+  assert.equal(c.$('selected-files').children.length,1); // items and files must not duplicate the screenshot.
+  const thumb=c.$('selected-files').children[0].children[0];assert.equal(thumb.tagName,'img');assert.match(thumb.src,/^blob:/);
+  assert.match(c.run('stagedFiles[0].name'),/^clipboard-.*\.png$/);
+  c.$('confirm-upload').onclick();assert.equal(c.uploaded.length,1);assert.equal(c.uploaded[0].files[0].type,'image/png');assert.equal(c.uploaded[0].room,'room-a');assert.deepEqual(c.revoked,c.urls);
+});
+
+test('plain and rich text paste keeps native behavior; clipboard file fallback still confirms',()=>{
+  const c=client();let prevented=0;
+  c.$('text').listeners.paste({target:c.$('text'),clipboardData:{items:[{kind:'string',type:'text/html'}],files:[],getData:()=>'<text>'},preventDefault(){prevented++;}});
+  assert.equal(prevented,0);assert.equal(c.$('upload-dialog').open,false);
+  const file=new File(['notes'],'notes.txt',{type:'text/plain'});
+  c.$('text').listeners.paste({target:c.$('text'),clipboardData:{items:[],files:[file],getData:()=>''},preventDefault(){prevented++;}});
+  assert.equal(prevented,1);assert.equal(c.$('upload-dialog').open,true);assert.equal(c.uploaded.length,0);c.$('cancel-upload').onclick();assert.equal(c.uploaded.length,0);
+});
+
+test('inline images use the seven-day boundary, explicit expansion, cached nodes and cleanup',()=>{
+  const c=client();c.sandbox.recent={id:50,file_key:'key',file_name:'截图.PNG',file_size:100,created:Date.now()};
+  const recent=c.run('createFileCard(recent)'),view=recent.children[1],eye=recent.children[2].children[0],image=view.children[0].children[0];
+  assert.equal(view.hidden,false);assert.equal(image.src,'/api/files/50/content');assert.equal(image.loading,'lazy');assert.equal(image.decoding,'async');
+  eye.onclick();assert.equal(view.hidden,true);eye.onclick();assert.equal(view.hidden,false);
+  const rerendered=c.run('createFileCard(recent)');assert.equal(rerendered.children[1].children[0].children[0],image);
+  c.sandbox.old={id:51,file_key:'key-old',file_name:'older.jpg',file_size:100,created:Date.now()-7*86400000};
+  const old=c.run('createFileCard(old)'),oldView=old.children[1],oldEye=old.children[2].children[0];assert.equal(oldView.hidden,true);assert.equal(oldView.children.length,0);
+  oldEye.onclick();assert.equal(oldView.hidden,false);assert.equal(oldView.children[0].children[0].src,'/api/files/51/content');assert.equal(oldEye.attributes['aria-expanded'],'true');
+  assert.equal(c.run('createFileCard(old)').children[1],oldView);
+  c.run('pruneInlineImages([])');assert.equal(c.run('inlineImageViews.size'),0);assert.equal(c.run('expandedInlineImages.size'),0);assert.equal(c.run('createFileCard(old)').children[1].children.length,0);
+  c.sandbox.svg={id:52,file_key:'key-svg',file_name:'untrusted.svg',file_size:100,created:Date.now()};assert.equal(c.run('createFileCard(svg)').children.length,2);
+});
 test('drop over the composer prevents navigation and waits for explicit confirmation',async()=>{
   const c=client(),file={name:'报告.pdf',size:1234};let prevented=0;
   const event={target:{id:'text'},dataTransfer:{types:['Files'],files:[file]},preventDefault(){prevented++;}};

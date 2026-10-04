@@ -49,6 +49,11 @@ test('login, independent rooms, live events, upload/download, retry, revocation 
     const pdf=await uploadFixture('预览.pdf','%PDF-1.4\n%%EOF');
     const pdfMeta=await (await request(`/files/${pdf.id}/preview`,{cookie})).json();assert.equal(pdfMeta.kind,'pdf');
     const inline=await request(`/files/${pdf.id}/content`,{cookie});assert.equal(inline.status,200);assert.match(inline.headers.get('content-disposition'),/^inline/);assert.match(inline.headers.get('content-type'),/application\/pdf/);
+    const pngBytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCWQAAAAASUVORK5CYII=','base64');
+    const png=await uploadFixture('截图.png',pngBytes);
+    assert.equal((await (await request(`/files/${png.id}/preview`,{cookie})).json()).kind,'image');
+    const imageResponse=await request(`/files/${png.id}/content`,{cookie});assert.equal(imageResponse.status,200);assert.match(imageResponse.headers.get('content-type'),/^image\/png/);assert.deepEqual(Buffer.from(await imageResponse.arrayBuffer()),pngBytes);
+    assert.equal((await request(`/files/${png.id}/content`)).status,401);
     const html=await uploadFixture('不执行.html','<script>window.secret=1</script>');
     const textPreview=await (await request(`/files/${html.id}/preview`,{cookie})).json();assert.equal(textPreview.kind,'text');assert.equal(textPreview.text,'<script>window.secret=1</script>');assert.equal((await request(`/files/${html.id}/content`,{cookie})).status,415);
     const archive=await uploadFixture('归档.zip','not-an-office-file');assert.equal((await (await request(`/files/${archive.id}/preview`,{cookie})).json()).kind,'unsupported');
@@ -60,7 +65,7 @@ test('login, independent rooms, live events, upload/download, retry, revocation 
     const workbook=new ExcelJS.Workbook();workbook.addWorksheet('项目').addRow(['Excel 预览测试',123]);
     const xlsx=await uploadFixture('表格.xlsx',await workbook.xlsx.writeBuffer());
     const xlsxPreview=await (await request(`/files/${xlsx.id}/preview`,{cookie})).json();assert.equal(xlsxPreview.kind,'spreadsheet');assert.deepEqual(xlsxPreview.sheets[0].rows[0],['Excel 预览测试','123']);
-    const allFiles=await (await request('/files',{cookie})).json();assert.equal(allFiles.length,6);assert.equal(allFiles[0].room_name,'项目 B');
+    const allFiles=await (await request('/files',{cookie})).json();assert.equal(allFiles.length,7);assert.equal(allFiles[0].room_name,'项目 B');
     assert.equal((await (await request(`/search?q=${encodeURIComponent('实时同步')}`,{cookie})).json())[0].id,sent.id);
     for(let i=0;i<110;i++)await request(`/rooms/${initial.id}/messages`,{cookie,method:'POST',body:{body:`历史消息 ${i}`,clientId:randomUUID()}});
     const context=await (await request(`/messages/${sent.id}/context`,{cookie})).json();assert.equal(context.roomId,initial.id);assert.equal(context.messages[0].id,sent.id);assert.equal(context.hasAfter,true);assert.equal(context.hasBefore,false);

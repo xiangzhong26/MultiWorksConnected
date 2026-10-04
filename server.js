@@ -29,7 +29,7 @@ app.set('case sensitive routing',true);
 app.use((req,res,next)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','same-origin');
-  res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   if(req.path.startsWith('/api')) res.setHeader('Cache-Control','no-store');
   if(!['GET','HEAD','OPTIONS'].includes(req.method)) {
     const expected = process.env.PUBLIC_ORIGIN || `http://${req.headers.host}`;

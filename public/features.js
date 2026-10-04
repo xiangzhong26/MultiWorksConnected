@@ -2,6 +2,32 @@ function tr(text){return typeof t==='function'?t(text):text;}
 let historyWindow=false,historyCursor=0,stagedFiles=[],stagedRoom=null,roomToDelete=null,locatedId=null;
 let globalRows=[],globalGeneration=0,libraryTimer,globalTimer;
 const activeTransfers=new Set();
+const inlineImageViews=new Map(),expandedInlineImages=new Set(),collapsedInlineImages=new Set(),stagedImageUrls=new Set();
+const inlineImageExtension=/\.(png|jpe?g|gif|webp)$/i;
+function releaseStagedImages(){for(const url of stagedImageUrls)URL.revokeObjectURL(url);stagedImageUrls.clear();}
+function pruneInlineImages(visible){
+  const ids=new Set(visible.filter(m=>m.file_key&&inlineImageExtension.test(m.file_name)).map(m=>m.id));
+  for(const [id,entry] of inlineImageViews)if(!ids.has(id)){entry.image?.removeAttribute('src');inlineImageViews.delete(id);expandedInlineImages.delete(id);collapsedInlineImages.delete(id);}
+}
+function inlineImageView(message){
+  let entry=inlineImageViews.get(message.id);
+  if(!entry){const view=document.createElement('div');view.className='inline-image-view';view.id=`inline-image-${message.id}`;entry={view,image:null};inlineImageViews.set(message.id,entry);}
+  return entry;
+}
+function attachmentDrag(event,message){
+  const url=new URL(`/api/files/${message.id}`,location.origin).href;
+  const filename=message.file_name.replace(/[\\/:\r\n]/g,'_');
+  event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('DownloadURL',`application/octet-stream:${filename}:${url}`);
+  event.dataTransfer.setData('text/uri-list',url);event.dataTransfer.setData('application/x-multiworks-file',String(message.id));
+}
+function showInlineImage(entry,message){
+  entry.view.hidden=false;
+  if(entry.image)return;
+  const link=document.createElement('a');link.href=previewLink(message);link.target='_blank';link.rel='noopener';link.className='inline-image-link';link.draggable=true;link.ondragstart=e=>attachmentDrag(e,message);
+  const image=document.createElement('img');image.className='inline-image';image.alt=message.file_name;image.loading='lazy';image.decoding='async';image.width=360;image.height=200;
+  image.onerror=()=>{image.removeAttribute('src');entry.image=null;entry.view.replaceChildren();const note=document.createElement('p');note.className='inline-image-error';note.textContent=tr('图片暂时无法显示，可点击小眼睛重试或下载原文件。');entry.view.append(note);};
+  image.src=`/api/files/${message.id}/content`;entry.image=image;link.append(image);entry.view.replaceChildren(link);
+}
 
 function setNoRoom(){
   active=null;messages=[];hasMore=false;historyWindow=false;roomGeneration++;
@@ -13,6 +39,7 @@ function setNoRoom(){
 }
 function setHistoryControls(){$('load-newer').hidden=!historyWindow;$('back-latest').hidden=!historyWindow;}
 function resetFileSession(){
+  releaseStagedImages();pruneInlineImages([]);expandedInlineImages.clear();collapsedInlineImages.clear();
   for(const item of activeTransfers){item.cancelled=true;item.xhr?.abort();item.row.remove();}
   activeTransfers.clear();globalGeneration++;globalRows=[];
   $('global-results').replaceChildren();
@@ -28,17 +55,48 @@ function createFileCard(message){
   const title=document.createElement('strong');title.textContent=message.file_name;
   const detail=document.createElement('small');detail.textContent=size(message.file_size)+(typeof language!=='undefined'&&language==='en'?' · Click to preview':' · 点击预览');
   info.append(title,detail);link.append(icon,info);
-  link.ondragstart=e=>{
-    const url=new URL(`/api/files/${message.id}`,location.origin).href;
-    const filename=message.file_name.replace(/[\\/:\r\n]/g,'_');
-    e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData('DownloadURL',`application/octet-stream:${filename}:${url}`);
-    e.dataTransfer.setData('text/uri-list',url);e.dataTransfer.setData('application/x-multiworks-file',String(message.id));
-  };
+  link.ondragstart=e=>attachmentDrag(e,message);
   const actions=document.createElement('div');actions.className='file-actions';
   const download=document.createElement('a');download.href=`/api/files/${message.id}`;download.download=message.file_name;download.textContent=tr('下载');
   const open=document.createElement('a');open.href=previewLink(message);open.target='_blank';open.rel='noopener';open.textContent=tr('预览');
-  actions.append(open,download);wrapper.append(link,actions);return wrapper;
+  actions.append(open,download);wrapper.append(link);
+  if(inlineImageExtension.test(message.file_name)){
+    const recent=Number.isFinite(message.created)&&message.created>Date.now()-7*86400000;
+    const entry=inlineImageView(message),eye=document.createElement('button');eye.type='button';eye.className='image-eye';eye.textContent='👁';eye.setAttribute('aria-controls',entry.view.id);
+    let visible=recent?!collapsedInlineImages.has(message.id):expandedInlineImages.has(message.id);
+    function update(){
+      entry.view.hidden=!visible;if(visible)showInlineImage(entry,message);
+      eye.title=tr(visible?'收起图片':'显示图片');eye.setAttribute('aria-label',eye.title);eye.setAttribute('aria-expanded',String(visible));
+    }
+    eye.onclick=()=>{if(visible&&!entry.image){update();return;}visible=!visible;if(recent){if(visible)collapsedInlineImages.delete(message.id);else collapsedInlineImages.add(message.id);}else{if(visible)expandedInlineImages.add(message.id);else expandedInlineImages.delete(message.id);}update();};
+    if(!recent)detail.textContent=size(message.file_size)+' · '+tr('7 天前的图片，点击小眼睛展开');
+    update();wrapper.append(entry.view);actions.prepend(eye);
+  }
+  wrapper.append(actions);return wrapper;
 }
+
+// Clipboard events do not require clipboard-read permission and work on local HTTP too.
+function pasteAttachments(event){
+  const clipboard=event.clipboardData;if(!clipboard)return;
+  let files=[...(clipboard.items||[])].filter(item=>item.kind==='file').map(item=>item.getAsFile()).filter(Boolean);
+  if(!files.length)files=[...(clipboard.files||[])];
+  if(!files.length)return; // Leave ordinary text, links and rich-text-to-text pastes to the textarea.
+  event.preventDefault();
+  const now=new Date(),pad=(n,width=2)=>String(n).padStart(width,'0');
+  const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}${pad(now.getMilliseconds(),3)}`;
+  const extensions={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','image/bmp':'bmp','image/avif':'avif'};
+  files=files.map((file,index)=>{
+    if(!file.type?.startsWith('image/'))return file;
+    const ext=extensions[file.type];if(!ext)return file;
+    if(file.name&& !/^(image|blob|clipboard)(\.[a-z0-9]+)?$/i.test(file.name)&&inlineImageExtension.test(file.name))return file;
+    return new File([file],`clipboard-${stamp}-${index+1}.${ext}`,{type:file.type,lastModified:file.lastModified||Date.now()});
+  });
+  const text=clipboard.getData?.('text/plain');
+  if(text&&event.target===$('text')){$('text').setRangeText(text,$('text').selectionStart,$('text').selectionEnd,'end');$('text').oninput?.();}
+  stageFiles(files);
+}
+$('text').addEventListener('paste',pasteAttachments);
+$('upload-dialog').addEventListener('paste',pasteAttachments);
 
 function stageFiles(files){
   if(!user||!active){toast('请先选择一个项目群');return;}
@@ -49,16 +107,21 @@ function stageFiles(files){
   stagedFiles.push(...valid);renderStaged();if(!$('upload-dialog').open)$('upload-dialog').showModal();
 }
 function renderStaged(){
+  releaseStagedImages();
   $('upload-target').textContent=typeof language!=='undefined'&&language==='en'?`Send to ${rooms.find(r=>r.id===stagedRoom)?.name||'Deleted project'} · ${stagedFiles.length} files. No upload before confirmation.`:`发送到「${rooms.find(r=>r.id===stagedRoom)?.name||'已删除的群'}」 · ${stagedFiles.length} 个文件。确认前不会上传。`;
   $('selected-files').replaceChildren();
   stagedFiles.forEach((file,index)=>{
     const row=document.createElement('div');row.className='selected-file';const label=document.createElement('span');label.textContent=`${file.name} · ${size(file.size)}`;
     const remove=document.createElement('button');remove.className='secondary';remove.textContent=tr('移除');remove.onclick=()=>{stagedFiles.splice(index,1);renderStaged();};
+    if(/^image\/(png|jpeg|gif|webp)$/.test(file.type||'')){
+      const image=document.createElement('img');image.className='staged-image';image.alt=file.name;
+      const url=URL.createObjectURL(file);stagedImageUrls.add(url);image.src=url;row.append(image);
+    }
     row.append(label,remove);$('selected-files').append(row);
   });$('confirm-upload').disabled=!stagedFiles.length;
 }
 $('cancel-upload').onclick=()=>$('upload-dialog').close();
-$('upload-dialog').addEventListener('close',()=>{stagedFiles=[];stagedRoom=null;});
+$('upload-dialog').addEventListener('close',()=>{releaseStagedImages();$('selected-files').replaceChildren();stagedFiles=[];stagedRoom=null;});
 $('confirm-upload').onclick=()=>{
   if(!rooms.some(r=>r.id===stagedRoom)){toast('项目群已被删除');$('upload-dialog').close();return;}
   const files=[...stagedFiles],roomId=stagedRoom;$('upload-dialog').close();queueFiles(files,roomId);

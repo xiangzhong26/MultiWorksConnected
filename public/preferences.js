@@ -1,5 +1,7 @@
 const language=localStorage.getItem('mw-language')||(navigator.language?.startsWith('zh')?'zh':'en');
 const translations={
+'确认发送':'Confirm send',
+'显示图片':'Show image','收起图片':'Hide image','7 天前的图片，点击小眼睛展开':'Older than 7 days; use the eye to expand','图片暂时无法显示，可点击小眼睛重试或下载原文件。':'Image unavailable. Use the eye to retry or download the original.',
 '删除项目群':'Delete project',
 '消息及其附件会从所有设备移除，并删除服务器上的本地文件。此操作无法撤销。':'The message and its physical attachment will be permanently deleted from all devices.',
 '拖动调整顺序':'Drag to reorder',
