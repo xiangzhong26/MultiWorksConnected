@@ -16,7 +16,7 @@ async function loadPreview(){
     if(file.truncated)$('preview-note').textContent+=t(' 内容已截取，下载原文件可查看全部。');
     if(file.kind==='pdf'){
       await renderPdf(file);
-      $('preview-note').textContent=t('PDF 在本地服务提供的阅读器中打开。可翻页、缩放，并提取当前页文字；不执行 PDF 脚本。');
+      $('preview-note').textContent=t('PDF 支持连续上下滚动、缩放与页码跳转；页面按需加载，不执行 PDF 脚本。');
     }else if(file.kind==='image'){
       const image=document.createElement('img');image.src=file.url;image.alt=file.name;image.className='preview-image';image.onerror=()=>status(t('文件内容与格式不匹配，或文件已被删除。'));$('preview-content').append(image);
     }else if(file.kind==='text'){
@@ -42,38 +42,6 @@ async function renderPdf(file){
   GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.mjs';
   const task=getDocument({url:file.url,isEvalSupported:false,useWasm:false,standardFontDataUrl:'/vendor/pdfjs-fonts/',cMapUrl:'/vendor/pdfjs-cmaps/',cMapPacked:true});
   const pdf=await task.promise;
-  let pageNumber=1,zoom=null,renderTask,generation=0;
-  const toolbar=document.createElement('div');toolbar.className='pdf-toolbar';
-  const previous=document.createElement('button');previous.textContent=t('上一页');
-  const pageInput=document.createElement('input');pageInput.type='number';pageInput.min=1;pageInput.max=pdf.numPages;pageInput.value=1;pageInput.setAttribute('aria-label','PDF 页码');
-  const count=document.createElement('span');count.textContent=`/ ${pdf.numPages}`;
-  const next=document.createElement('button');next.textContent=t('下一页');
-  const smaller=document.createElement('button');smaller.textContent=t('−');smaller.setAttribute('aria-label','缩小 PDF');
-  const larger=document.createElement('button');larger.textContent=t('＋');larger.setAttribute('aria-label','放大 PDF');
-  const fit=document.createElement('button');fit.textContent=t('适应宽度');
-  toolbar.append(previous,pageInput,count,next,smaller,larger,fit);
-  const surface=document.createElement('div');surface.className='pdf-surface';
-  const canvas=document.createElement('canvas');canvas.setAttribute('aria-label',file.name);surface.append(canvas);
-  const details=document.createElement('details');details.className='pdf-text';const summary=document.createElement('summary');summary.textContent=t('提取当前页文字');const text=document.createElement('pre');details.append(summary,text);
-  $('preview-content').append(toolbar,surface,details);
-  async function render(){
-    const current=++generation;renderTask?.cancel();
-    previous.disabled=pageNumber===1;next.disabled=pageNumber===pdf.numPages;pageInput.value=pageNumber;
-    try{
-      const page=await pdf.getPage(pageNumber);if(current!==generation)return;
-      const original=page.getViewport({scale:1}),fitScale=Math.min(1.5,Math.max(200,surface.clientWidth-32)/original.width);
-      const scale=zoom??fitScale;const pixelRatio=Math.min(devicePixelRatio||1,2,4096/(Math.max(original.width,original.height)*scale));
-      const viewport=page.getViewport({scale:scale*pixelRatio});canvas.width=Math.floor(viewport.width);canvas.height=Math.floor(viewport.height);canvas.style.width=`${viewport.width/pixelRatio}px`;canvas.style.height=`${viewport.height/pixelRatio}px`;
-      renderTask=page.render({canvasContext:canvas.getContext('2d'),viewport});await renderTask.promise;
-      if(current!==generation)return;const content=await page.getTextContent();if(current!==generation)return;
-      text.textContent=content.items.map(item=>item.str+(item.hasEOL?'\n':' ')).join('')||t('本页没有可提取的文字，可能是扫描件。');
-    }catch(e){if(e.name!=='RenderingCancelledException')toastPdf('此页无法显示，请下载原文件查看。');}
-  }
-  function toastPdf(message){text.textContent=message;details.open=true;}
-  previous.onclick=()=>{pageNumber--;render();};next.onclick=()=>{pageNumber++;render();};
-  pageInput.onchange=()=>{pageNumber=Math.max(1,Math.min(pdf.numPages,Number(pageInput.value)||1));render();};
-  smaller.onclick=()=>{zoom=Math.max(.3,(zoom??1)*.8);render();};larger.onclick=()=>{zoom=Math.min(3,(zoom??1)*1.25);render();};fit.onclick=()=>{zoom=null;render();};
-  let resizeTimer;const observer=new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(zoom===null)render();},150);});observer.observe(surface);
-  window.addEventListener('pagehide',()=>{observer.disconnect();renderTask?.cancel();task.destroy();},{once:true});
-  await render();
+  const {mountPdfReader}=await import('/pdf-reader.js');
+  await mountPdfReader(pdf, $('preview-content'), file.name, t, task);
 }

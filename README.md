@@ -179,7 +179,7 @@ npm start
 
 | 格式 | 预览方式 |
 | --- | --- |
-| PDF | 服务自带 PDF 阅读器，支持翻页、缩放、提取当前页文字，不执行 PDF 脚本 |
+| PDF | 服务自带 PDF 阅读器，支持连续上下滚动、页码跳转、缩放和提取当前页文字；仅绘制附近页面，远处页面释放画布，不执行 PDF 脚本 |
 | PNG / JPEG / GIF / WebP | 图片预览 |
 | TXT / Markdown / CSV / JSON 及常见代码文件 | 纯文本显示，最多显示前 1 MB；HTML 也只显示源码 |
 | DOCX | 提取 Word 正文，不保留完整排版，最多显示 20 万字符 |
@@ -188,7 +188,7 @@ npm start
 
 预览在本地完成，不将内容发送到第三方。Office 文件预览上限为 10 MB，转换有时间和内存限制；加密或损坏文件需下载后打开。预览为只读，不支持在线编辑。
 
-![PDF 阅读器示例](artifacts/pdf-preview.jpg)
+![PDF 阅读器示例](artifacts/pdf-continuous.jpg)
 
 ## 配置
 

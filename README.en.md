@@ -179,7 +179,7 @@ Opening a project jumps directly to its latest messages. Requests fetch at most 
 
 | Format | Preview |
 | --- | --- |
-| PDF | Local reader with page navigation, zoom, and current-page text extraction; no PDF scripts |
+| PDF | Local reader with continuous scrolling, page jumps, zoom, and current-page text extraction; only nearby pages retain rendered canvases; no PDF scripts |
 | PNG / JPEG / GIF / WebP | Image preview |
 | TXT / Markdown / CSV / JSON and common code files | Plain text, first 1 MB; HTML is shown as source only |
 | DOCX | Word text extraction, without full layout fidelity; up to 200,000 characters |
@@ -188,7 +188,7 @@ Opening a project jumps directly to its latest messages. Requests fetch at most 
 
 Previews run locally without sending content to third parties. Office previews are limited to 10 MB with conversion time and memory limits. Encrypted or damaged documents require local download. Previews are read-only; online editing is not supported.
 
-![PDF reader example](artifacts/pdf-preview.jpg)
+![PDF reader example](artifacts/pdf-continuous.jpg)
 
 ## Configuration
 
