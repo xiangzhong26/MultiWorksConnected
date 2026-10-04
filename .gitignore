@@ -1,0 +1,22 @@
+node_modules/
+data/
+.env
+.env.*
+!.env.example
+test-data/
+
+# Runtime data, logs and backups, including custom database paths
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+backups/
+
+# Real deployment configuration and private key material
+deploy/*.toml
+deploy/Caddyfile
+*.key
+*.pem
+*.p12
+*.pfx

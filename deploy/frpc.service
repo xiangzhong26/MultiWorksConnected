@@ -1,0 +1,14 @@
+[Unit]
+Description=MultiWorks frp client
+After=network-online.target multiworks.service
+Wants=network-online.target
+
+[Service]
+User=multiworks
+ExecStart=/usr/local/bin/frpc -c /etc/frp/frpc.toml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

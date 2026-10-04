@@ -1,0 +1,4 @@
+work.example.com {
+    reverse_proxy 127.0.0.1:18080
+    # Keep uploads streaming; do not add request body buffering or response caching.
+}

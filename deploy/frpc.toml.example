@@ -1,0 +1,15 @@
+serverAddr = "YOUR_CLOUD_SERVER_IP"
+serverPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_SAME_LONG_RANDOM_SECRET"
+transport.tls.enable = true
+# Recommended: configure a trusted certificate for the frps endpoint.
+# transport.tls.trustedCaFile = "/etc/frp/ca.crt"
+# transport.tls.serverName = "relay.example.com"
+
+[[proxies]]
+name = "multiworks"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3000
+remotePort = 18080
