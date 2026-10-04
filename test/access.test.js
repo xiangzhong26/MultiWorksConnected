@@ -41,7 +41,7 @@ test('migration, guest scopes, revocation, expiration, history retention, groups
     const sharedMessage=await json(`/rooms/${a.id}/messages`,cookie,{body:'shared needle',clientId:randomUUID()});assert.equal(sharedMessage.guest_id,guest.id);assert.equal(sharedMessage.sender_username,'collaborator');
     assert.equal((await req(`/messages/${privateMessage.id}/context`,cookie)).status,403);assert.equal((await json('/search?q=needle',cookie)).length,1);
     const adminMessage=await json(`/rooms/${a.id}/messages`,admin,{body:'owner message',clientId:randomUUID()});assert.equal((await req(`/messages/${adminMessage.id}`,cookie,undefined,'DELETE')).status,403);
-    async function upload(roomId,name,contents='fixture-content'){const form=new FormData();form.append('file',new Blob([contents]),name);form.append('clientId',randomUUID());const response=await fetch(origin+`/api/rooms/${roomId}/files`,{method:'POST',headers:{Cookie:admin,'X-Workspace-Request':'1',Origin:origin},body:form});assert.equal(response.status,200);return response.json();}
+    async function upload(roomId,name,contents='fixture-content',uploader=admin){const form=new FormData();form.append('file',new Blob([contents]),name);form.append('clientId',randomUUID());const response=await fetch(origin+`/api/rooms/${roomId}/files`,{method:'POST',headers:{Cookie:uploader,'X-Workspace-Request':'1',Origin:origin},body:form});assert.equal(response.status,200);return response.json();}
     const sharedFile=await upload(a.id,'shared.pdf'),privateFile=await upload(b.id,'secret.txt');
     const emptyFile=await upload(a.id,'empty.txt','');assert.equal(emptyFile.file_size,0);
     for(const suffix of ['', '/preview','/content'])assert.equal((await req(`/files/${privateFile.id}${suffix}`,cookie)).status,403);
@@ -51,6 +51,18 @@ test('migration, guest scopes, revocation, expiration, history retention, groups
     assert.notEqual((await req('/GUESTS',cookie)).status,200);
     const filtered=await json('/files?stats=1&ext=pdf',cookie);assert.equal(filtered.count,1);assert.equal(filtered.rows[0].id,sharedFile.id);assert.equal(filtered.bytes,15);
     assert.equal((await json(`/files?stats=1&room=${b.id}`,cookie)).count,0);assert.equal((await json('/files?stats=1&min=1000',admin)).count,0);assert.equal((await json('/files?stats=1&to=1',admin)).count,0);
+    // Same display name across accounts must keep independent bytes and deletion targets.
+    const ownerCopy=await upload(a.id,'same-name.txt','owner contents');
+    const guestCopy=await upload(a.id,'same-name.txt','guest contents',cookie);
+    assert.equal(ownerCopy.file_name,guestCopy.file_name);
+    assert.notEqual(ownerCopy.id,guestCopy.id);assert.notEqual(ownerCopy.file_key,guestCopy.file_key);
+    assert.equal((await req(`/files/${ownerCopy.id}`,cookie)).status,200);
+    assert.equal(await (await req(`/files/${ownerCopy.id}`,admin)).text(),'owner contents');
+    assert.equal(await (await req(`/files/${guestCopy.id}`,cookie)).text(),'guest contents');
+    await json(`/messages/${guestCopy.id}`,cookie,undefined,'DELETE');
+    assert.equal(existsSync(path.join(dir,'files',guestCopy.file_key)),false);
+    assert.equal(existsSync(path.join(dir,'files',ownerCopy.file_key)),true);
+    assert.equal(await (await req(`/files/${ownerCopy.id}`,admin)).text(),'owner contents');
     ws=new WebSocket(`ws://127.0.0.1:${port}/ws`,{headers:{Cookie:cookie,Origin:origin}});await once(ws,'open');const events=[];ws.on('message',raw=>events.push(JSON.parse(raw)));
     await json(`/rooms/${b.id}/messages`,admin,{body:'secret live',clientId:randomUUID()});await json(`/rooms/${a.id}/messages`,admin,{body:'public live',clientId:randomUUID()});await new Promise(resolve=>setTimeout(resolve,80));assert.equal(events.filter(e=>e.type==='message').length,1);assert.equal(events[0].message.body,'public live');
     const closed=once(ws,'close');await json(`/guests/${guest.id}`,admin,{enabled:false},'PATCH');assert.equal((await closed)[0],4001);assert.equal((await req('/rooms',cookie)).status,401);
