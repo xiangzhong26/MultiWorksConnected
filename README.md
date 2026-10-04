@@ -7,7 +7,7 @@
 
 | 深色聊天 · 专注工作 | 文件查看器 · 集中整理 |
 | :---: | :---: |
-| ![深色聊天界面](artifacts/chat-dark.png) | ![文件查看器](artifacts/files-viewer.png) |
+| ![深色聊天界面](artifacts/refreshed-dark.jpg) | ![文件查看器](artifacts/refreshed-files.jpg) |
 
 <p align="center"><sub>真实界面截图，使用独立测试环境的示例数据。应用和文档均支持中英文切换。</sub></p>
 

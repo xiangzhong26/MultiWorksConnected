@@ -7,7 +7,7 @@
 
 | Dark chat · Stay focused | File viewer · Keep things organized |
 | :---: | :---: |
-| ![Dark chat](artifacts/chat-dark.png) | ![File viewer](artifacts/files-viewer.png) |
+| ![Dark chat](artifacts/refreshed-dark.jpg) | ![File viewer](artifacts/refreshed-files.jpg) |
 
 <p align="center"><sub>Real screenshots using synthetic data in an isolated test environment. Both the app and documentation support English and Chinese.</sub></p>
 
