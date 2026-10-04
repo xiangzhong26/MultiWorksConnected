@@ -140,3 +140,14 @@ Use Task Scheduler to start Node and frpc at boot even without an interactive lo
 6. Measure throughput on the actual home and cloud connections.
 
 `npm test` checks application behavior with disposable data, not cloud configuration, uptime, or real-world performance.
+
+## Updating an existing deployment
+
+Update only the computer running the Node.js application. A cloud server used solely for Caddy / frp relay needs no changes.
+
+1. Stop the application and back up the existing `.env` and entire `DATA_DIR`, including SQLite, WAL/SHM and files.
+2. In the existing checkout, run `git pull --ff-only origin main` and `npm ci --omit=dev`.
+3. Keep the same configuration and data path. Start the application (`sudo systemctl start multiworks` on Ubuntu).
+4. Hard-refresh browsers. Database fields and tables migrate automatically; old projects, messages, attachments and administrator credentials remain. Do not reinitialize.
+
+To roll back after migration, restore the pre-update data backup alongside the older application version.

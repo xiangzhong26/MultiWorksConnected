@@ -11,13 +11,13 @@ function cancelTransfer(item){
 function queueFiles(files,targetRoom=active){
   if(!targetRoom)return;
   for(const file of files){
-    if(file.size>window.maxFileMB*1048576){toast(`${file.name} 超过 ${window.maxFileMB} MB`);continue;}
+    if(file.size>window.maxFileMB*1048576){toast(typeof language!=='undefined'&&language==='en'?`${file.name} exceeds ${window.maxFileMB} MB`:`${file.name} 超过 ${window.maxFileMB} MB`);continue;}
     const item={file,roomId:targetRoom,clientId:crypto.randomUUID()};
     const row=document.createElement('div');row.className='transfer';
-    const label=document.createElement('span');label.textContent=`${file.name} · 等待上传`;
+    const label=document.createElement('span');label.textContent=`${file.name} · ${tr('等待上传')}`;
     const progress=document.createElement('progress');progress.max=100;progress.value=0;
-    const retry=document.createElement('button');retry.className='secondary';retry.textContent='重试';retry.hidden=true;
-    const cancel=document.createElement('button');cancel.className='secondary';cancel.textContent='取消';
+    const retry=document.createElement('button');retry.className='secondary';retry.textContent=tr('重试');retry.hidden=true;
+    const cancel=document.createElement('button');cancel.className='secondary';cancel.textContent=tr('取消');
     row.append(label,progress,retry,cancel);$('transfers').append(row);
     Object.assign(item,{row,label,progress,retry,cancel});activeTransfers.add(item);
     cancel.onclick=()=>cancelTransfer(item);
@@ -37,7 +37,7 @@ function pumpUploads(){
 async function uploadFile(item){
   item.retry.hidden=true;item.retry.disabled=false;item.progress.value=0;
   try{await item.file.slice(0,1).arrayBuffer();}
-  catch{item.label.textContent=`${item.file.name} · 无法读取文件，不支持文件夹，请压缩后重新选择`;return;}
+  catch{item.label.textContent=`${item.file.name} · ${tr('无法读取文件，不支持文件夹，请压缩后重新选择')}`;return;}
   if(item.cancelled)return;
   return new Promise(resolve=>{
     const xhr=new XMLHttpRequest();item.xhr=xhr;
@@ -45,14 +45,14 @@ async function uploadFile(item){
     let settled=false;
     function finish(){if(!settled){settled=true;resolve();}}
     function fail(message,retryable=true){
-      if(!item.cancelled){item.label.textContent=`${item.file.name} · ${message}`;item.retry.hidden=!retryable;item.retry.disabled=false;}
+      if(!item.cancelled){item.label.textContent=`${item.file.name} · ${tr(message)}`;item.retry.hidden=!retryable;item.retry.disabled=false;}
       finish();
     }
     try{
       form.append('file',item.file);form.append('clientId',item.clientId);
       xhr.open('POST',`/api/rooms/${item.roomId}/files`);xhr.setRequestHeader('X-Workspace-Request','1');
-      item.label.textContent=`${item.file.name} · 正在上传`;
-      xhr.upload.onprogress=e=>{if(!item.cancelled&&e.lengthComputable){const percent=Math.round(e.loaded/e.total*100);item.progress.value=percent;item.label.textContent=`${item.file.name} · ${percent===100?'正在保存':percent+'%'}`;}};
+      item.label.textContent=`${item.file.name} · ${tr('正在上传')}`;
+      xhr.upload.onprogress=e=>{if(!item.cancelled&&e.lengthComputable){const percent=Math.round(e.loaded/e.total*100);item.progress.value=percent;item.label.textContent=`${item.file.name} · ${percent===100?tr('正在保存'):percent+'%'}`;}};
       xhr.onload=()=>{
         if(item.cancelled){finish();return;}
         let result;try{result=JSON.parse(xhr.responseText);}catch{return fail('服务器响应异常');}

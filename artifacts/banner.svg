@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#132039"/><stop offset="1" stop-color="#183d41"/></linearGradient><linearGradient id="card" x2="0" y2="1"><stop stop-color="#34465a"/><stop offset="1" stop-color="#233449"/></linearGradient></defs>
+<rect width="1280" height="340" rx="24" fill="url(#bg)"/><circle cx="1130" cy="30" r="190" fill="#76dcc7" opacity=".04"/><circle cx="1100" cy="330" r="240" fill="#76dcc7" opacity=".04"/>
+<rect x="62" y="57" width="54" height="54" rx="16" fill="#85e3cf"/><text x="89" y="94" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="35" font-weight="800" fill="#17263d">M</text>
+<text x="62" y="180" font-family="Segoe UI,sans-serif" font-size="55" font-weight="700" fill="#f1f7fd">MultiWorks Connected</text>
+<text x="64" y="221" font-family="Segoe UI,sans-serif" font-size="22" fill="#b2c9d8">Your devices. Your projects. Your data.</text>
+<rect x="64" y="257" width="124" height="28" rx="14" fill="#85e3cf"/><text x="126" y="276" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="12" fill="#17263d">SELF-HOSTED</text>
+<text x="205" y="277" font-family="Segoe UI,sans-serif" font-size="13" fill="#a5bfcd">Node.js 24 · SQLite · WebSocket</text>
+<path d="M930 130L1050 195L950 270" fill="none" stroke="#85e3cf" opacity=".4" stroke-width="2" stroke-dasharray="5 7"/>
+<rect x="842" y="64" width="205" height="129" rx="14" fill="url(#card)" stroke="#64778e"/><rect x="856" y="78" width="177" height="101" rx="6" fill="#17263d"/><rect x="866" y="91" width="38" height="76" rx="4" fill="#233d4e"/><rect x="915" y="97" width="103" height="16" rx="5" fill="#85e3cf" opacity=".7"/><rect x="939" y="125" width="79" height="28" rx="5" fill="#416c69"/><path d="M832 199h225l-16 10H848z" fill="#91a6bc"/>
+<rect x="1081" y="136" width="91" height="157" rx="15" fill="#233449" stroke="#8294ac"/><rect x="1090" y="148" width="73" height="129" rx="7" fill="#17263d"/><rect x="1101" y="167" width="51" height="18" rx="4" fill="#85e3cf" opacity=".7"/><rect x="1110" y="196" width="42" height="30" rx="4" fill="#416c69"/><circle cx="1126" cy="285" r="3" fill="#a7bfce"/>
+<circle cx="984" cy="264" r="22" fill="#85e3cf"/><path d="M975 264h18m-5-5 5 5-5 5" fill="none" stroke="#17263d" stroke-width="2" stroke-linecap="round"/>
+</svg>
