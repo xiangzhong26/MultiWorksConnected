@@ -10,6 +10,7 @@ import WebSocket from 'ws';
 import JSZip from 'jszip';
 import ExcelJS from 'exceljs';
 import { existsSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 
 test('login, independent rooms, live events, upload/download, retry, revocation and persistence',async()=>{
   const dir=await mkdtemp(path.join(tmpdir(),'multiworks-test-'));
@@ -78,7 +79,14 @@ test('login, independent rooms, live events, upload/download, retry, revocation 
     const range=await request(`/files/${file.id}`,{cookie:cookie2,headers:{Range:'bytes=0-2'}});assert.equal(range.status,206);assert.equal(await range.text(),'pdf');
     const large=new FormData();large.append('file',new Blob([new Uint8Array(1048577)]),'large.zip');large.append('clientId',randomUUID());assert.equal((await fetch(origin+`/api/rooms/${room.id}/files`,{method:'POST',headers:{Cookie:cookie,'X-Workspace-Request':'1',Origin:origin},body:large})).status,413);
     await request(`/devices/${device2}/sessions`,{cookie,method:'DELETE'});assert.equal((await request('/rooms',{cookie:cookie2})).status,401);
-    ws.close();await stop();await start();
+    ws.close();await stop();
+    const retentionDatabase=new DatabaseSync(path.join(dir,'workspaces.sqlite'));
+    retentionDatabase.prepare('UPDATE messages SET created=? WHERE id=?').run(946684800000,sent.id);retentionDatabase.close();
+    await start();
+    const retained=await (await request(`/messages/${sent.id}/context`,{cookie})).json();
+    assert.equal(retained.messages.find(message=>message.id===sent.id).created,946684800000);
+    const firstPage=await (await request(`/rooms/${initial.id}/messages`,{cookie})).json();assert.equal(firstPage.length,100);
+    const olderPage=await (await request(`/rooms/${initial.id}/messages?before=${firstPage[0].id}`,{cookie})).json();assert.equal(olderPage.length,11);assert.equal(olderPage[0].id,sent.id);
     const persisted=await (await request(`/rooms/${room.id}/messages`,{cookie})).json();assert.equal(persisted[0].file_name,'工作.pdf');
     assert.equal(await (await request(`/files/${file.id}`,{cookie})).text(),'pdf-content');
     assert.equal((await (await request(`/rooms/${room.id}/messages?q=${encodeURIComponent('工作')}`,{cookie})).json()).length,1);

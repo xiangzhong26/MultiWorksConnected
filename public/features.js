@@ -41,6 +41,7 @@ function createFileCard(message){
 
 function stageFiles(files){
   if(!user||!active){toast('请先选择一个项目群');return;}
+  if([...files].some(file=>file.webkitRelativePath?.includes('/'))){toast('不支持上传文件夹，请先压缩成 ZIP 等压缩包后上传。');return;}
   const valid=[...files].filter(file=>{if(file.size>window.maxFileMB*1048576){toast(`${file.name} 超过 ${window.maxFileMB} MB`);return false;}return true;});
   if(!valid.length)return;
   if(!$('upload-dialog').open){stagedFiles=[];stagedRoom=active;}
@@ -62,6 +63,23 @@ $('confirm-upload').onclick=()=>{
   const files=[...stagedFiles],roomId=stagedRoom;$('upload-dialog').close();queueFiles(files,roomId);
 };
 let incomingDragDepth=0;
+async function stageDroppedFiles(dataTransfer){
+  const roomId=active;
+  // Capture entries and handles during the drop event; browsers protect them afterwards.
+  const files=[...dataTransfer.files];
+  const items=[...(dataTransfer.items||[])].filter(item=>item.kind==='file');
+  const entries=items.map(item=>{try{return item.webkitGetAsEntry?.();}catch{return null;}});
+  if(entries.some(entry=>entry?.isDirectory)){toast('不支持上传文件夹，请先压缩成 ZIP 等压缩包后上传。');return;}
+  const handles=items.map((item,index)=>{try{return !entries[index]&&item.getAsFileSystemHandle?item.getAsFileSystemHandle():null;}catch{return null;}});
+  if(handles.some(Boolean)){
+    const results=await Promise.allSettled(handles);
+    if(results.some(result=>result.status==='fulfilled'&&result.value?.kind==='directory')){toast('不支持上传文件夹，请先压缩成 ZIP 等压缩包后上传。');return;}
+  }
+  try{await Promise.all(files.map(file=>typeof file.slice==='function'?file.slice(0,1).arrayBuffer():Promise.resolve()));}
+  catch{toast('无法读取拖入的内容；不支持上传文件夹，请压缩后上传。');return;}
+  if(active!==roomId){toast('当前项目已切换，请重新选择要上传的文件。');return;}
+  if(files.length)stageFiles(files);else toast('不支持上传文件夹，请先压缩成 ZIP 等压缩包后上传。');
+}
 const isIncomingFile=e=>[...(e.dataTransfer?.types||[])].includes('Files')&&!e.dataTransfer.types.includes('application/x-multiworks-file');
 document.addEventListener('dragenter',e=>{if(isIncomingFile(e)){e.preventDefault();incomingDragDepth++;if(user)$('workspace').classList.add('file-dragging');}});
 document.addEventListener('dragover',e=>{if(isIncomingFile(e)){e.preventDefault();e.dataTransfer.dropEffect=user&&active?'copy':'none';}});
@@ -69,7 +87,7 @@ document.addEventListener('dragleave',e=>{if(isIncomingFile(e)&&--incomingDragDe
 document.addEventListener('drop',e=>{
   const incoming=isIncomingFile(e),internal=e.dataTransfer?.types.includes('application/x-multiworks-file');
   if(incoming||internal)e.preventDefault();incomingDragDepth=0;$('workspace').classList.remove('file-dragging');
-  if(incoming)stageFiles(e.dataTransfer.files);
+  if(incoming)return stageDroppedFiles(e.dataTransfer);
 });
 document.addEventListener('dragend',()=>{incomingDragDepth=0;$('workspace').classList.remove('file-dragging');});
 

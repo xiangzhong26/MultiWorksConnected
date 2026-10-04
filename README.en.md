@@ -114,6 +114,8 @@ Identity is per browser, not a hardware serial number. Private browsing or clear
 
 The default limit is **100 MB per file**. Upload retries retransmit the whole file; chunked and resumable uploads are not implemented.
 
+Folder uploads are unsupported. A folder drop asks you to compress it first. Failed uploads keep separate Retry and Cancel buttons; unreadable content must be canceled and selected again.
+
 ### Search and deletion
 
 - Search text and filenames in the active room; clear the field to return to normal history.
@@ -168,6 +170,8 @@ Run on an Ubuntu LTS laptop and use a cloud server for HTTPS and frp relay traff
 Validate two-device sync, file transfers, network recovery, and startup after reboot on your actual network. Throughput depends on host upload bandwidth, cloud bandwidth, and client connectivity.
 
 ## Security and privacy
+
+**Messages and attachments have no automatic retention expiry or record-count cap.** Batches of 100 are pagination, not deletion; the 30-day expiry applies only to login sessions. Data stays in `DATA_DIR` until you explicitly delete messages or rooms, or external deletion, disk failure, or insufficient storage interferes. Preserve and reuse the same data directory when updating, restarting, or moving the deployment, and make regular backups.
 
 - Passwords are salted scrypt hashes. Cookies use `HttpOnly` and `SameSite=Strict`; enable `Secure` for production HTTPS.
 - Messages and downloads require authentication. Room separation organizes data; it is not multi-user access control.
