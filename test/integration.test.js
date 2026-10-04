@@ -7,6 +7,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import WebSocket from 'ws';
+import JSZip from 'jszip';
+import ExcelJS from 'exceljs';
+import { existsSync } from 'node:fs';
 
 test('login, independent rooms, live events, upload/download, retry, revocation and persistence',async()=>{
   const dir=await mkdtemp(path.join(tmpdir(),'multiworks-test-'));
@@ -35,6 +38,41 @@ test('login, independent rooms, live events, upload/download, retry, revocation 
     assert.equal((await request(`/rooms/${initial.id}/messages`,{cookie,method:'POST',body:{body:'blocked',clientId:randomUUID()},headers:{Origin:'https://evil.example'}})).status,403);
     const form=new FormData();form.append('file',new Blob(['pdf-content']), '工作.pdf');form.append('clientId',randomUUID());
     const uploaded=await fetch(origin+`/api/rooms/${room.id}/files`,{method:'POST',headers:{Cookie:cookie,'X-Workspace-Request':'1',Origin:origin},body:form});assert.equal(uploaded.status,200);const file=await uploaded.json();assert.equal(file.file_name,'工作.pdf');
+    async function uploadFixture(name,contents){
+      const form=new FormData();form.append('file',new Blob([contents]),name);form.append('clientId',randomUUID());
+      const response=await fetch(origin+`/api/rooms/${room.id}/files`,{method:'POST',headers:{Cookie:cookie,'X-Workspace-Request':'1',Origin:origin},body:form});
+      assert.equal(response.status,200);return response.json();
+    }
+    assert.equal((await request(`/files/${file.id}/preview`)).status,401);
+    assert.equal((await request(`/files/${file.id}/content`,{cookie})).status,415);
+    const pdf=await uploadFixture('预览.pdf','%PDF-1.4\n%%EOF');
+    const pdfMeta=await (await request(`/files/${pdf.id}/preview`,{cookie})).json();assert.equal(pdfMeta.kind,'pdf');
+    const inline=await request(`/files/${pdf.id}/content`,{cookie});assert.equal(inline.status,200);assert.match(inline.headers.get('content-disposition'),/^inline/);assert.match(inline.headers.get('content-type'),/application\/pdf/);
+    const html=await uploadFixture('不执行.html','<script>window.secret=1</script>');
+    const textPreview=await (await request(`/files/${html.id}/preview`,{cookie})).json();assert.equal(textPreview.kind,'text');assert.equal(textPreview.text,'<script>window.secret=1</script>');assert.equal((await request(`/files/${html.id}/content`,{cookie})).status,415);
+    const archive=await uploadFixture('归档.zip','not-an-office-file');assert.equal((await (await request(`/files/${archive.id}/preview`,{cookie})).json()).kind,'unsupported');
+    const document=new JSZip();
+    document.file('[Content_Types].xml','<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+    document.file('word/document.xml','<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Word 正文预览测试</w:t></w:r></w:p></w:body></w:document>');
+    const docx=await uploadFixture('文档.docx',await document.generateAsync({type:'nodebuffer'}));
+    const docxPreview=await (await request(`/files/${docx.id}/preview`,{cookie})).json();assert.equal(docxPreview.kind,'text');assert.match(docxPreview.text,/Word 正文预览测试/);
+    const workbook=new ExcelJS.Workbook();workbook.addWorksheet('项目').addRow(['Excel 预览测试',123]);
+    const xlsx=await uploadFixture('表格.xlsx',await workbook.xlsx.writeBuffer());
+    const xlsxPreview=await (await request(`/files/${xlsx.id}/preview`,{cookie})).json();assert.equal(xlsxPreview.kind,'spreadsheet');assert.deepEqual(xlsxPreview.sheets[0].rows[0],['Excel 预览测试','123']);
+    const allFiles=await (await request('/files',{cookie})).json();assert.equal(allFiles.length,6);assert.equal(allFiles[0].room_name,'项目 B');
+    assert.equal((await (await request(`/search?q=${encodeURIComponent('实时同步')}`,{cookie})).json())[0].id,sent.id);
+    for(let i=0;i<110;i++)await request(`/rooms/${initial.id}/messages`,{cookie,method:'POST',body:{body:`历史消息 ${i}`,clientId:randomUUID()}});
+    const context=await (await request(`/messages/${sent.id}/context`,{cookie})).json();assert.equal(context.roomId,initial.id);assert.equal(context.messages[0].id,sent.id);assert.equal(context.hasAfter,true);assert.equal(context.hasBefore,false);
+    const deletionEvent=new Promise(resolve=>ws.on('message',raw=>{const event=JSON.parse(raw);if(event.type==='room-deleted')resolve(event);}));
+    const disposableRoom=await (await request('/rooms',{cookie,method:'POST',body:{name:'待删除的项目'}})).json();
+    const temporaryForm=new FormData();temporaryForm.append('file',new Blob(['temporary-content']),'待删除.txt');temporaryForm.append('clientId',randomUUID());
+    const temporary=await (await fetch(origin+`/api/rooms/${disposableRoom.id}/files`,{method:'POST',headers:{Cookie:cookie,'X-Workspace-Request':'1',Origin:origin},body:temporaryForm})).json();
+    assert.equal(existsSync(path.join(dir,'files',temporary.file_key)),true);
+    assert.equal((await request(`/rooms/${disposableRoom.id}`,{cookie,method:'DELETE'})).status,200);
+    assert.equal((await deletionEvent).roomId,disposableRoom.id);
+    assert.equal(existsSync(path.join(dir,'files',temporary.file_key)),false);
+    assert.equal((await request(`/files/${temporary.id}`,{cookie})).status,404);
+    assert.equal((await request(`/rooms/${disposableRoom.id}/messages`,{cookie})).status,404);
     assert.equal((await request(`/files/${file.id}`)).status,401);
     const download=await request(`/files/${file.id}`,{cookie:cookie2});assert.equal(await download.text(),'pdf-content');assert.match(download.headers.get('content-disposition'),/attachment/);
     const range=await request(`/files/${file.id}`,{cookie:cookie2,headers:{Range:'bytes=0-2'}});assert.equal(range.status,206);assert.equal(await range.text(),'pdf');
@@ -47,5 +85,11 @@ test('login, independent rooms, live events, upload/download, retry, revocation 
     assert.equal((await (await request(`/rooms/${initial.id}/messages?q=${encodeURIComponent('工作')}`,{cookie})).json()).length,0);
     assert.equal((await request(`/messages/${file.id}`,{cookie,method:'DELETE'})).status,200);
     assert.equal((await request(`/files/${file.id}`,{cookie})).status,404);
+    assert.equal((await request(`/rooms/${room.id}`,{cookie,method:'DELETE'})).status,200);
+    assert.equal((await (await request('/files',{cookie})).json()).length,0);
+    assert.equal((await request(`/files/${docx.id}/preview`,{cookie})).status,404);
+    assert.equal((await request(`/rooms/${initial.id}`,{cookie,method:'DELETE'})).status,200);
+    assert.equal((await (await request('/rooms',{cookie})).json()).length,0);
+    const recovery=await request('/rooms',{cookie,method:'POST',body:{name:'重新开始'}});assert.equal(recovery.status,200);
   }finally{ws?.terminate();if(child?.exitCode===null)await stop();await rm(dir,{recursive:true,force:true});}
 });
